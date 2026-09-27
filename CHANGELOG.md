@@ -5,7 +5,10 @@
      scripts, gesture plans, generators) stays in the repository for contributors, never ships
      in an installer, and is never mentioned here; the release job refuses a section that does. -->
 
-## Unreleased
+## 0.4.0 — Pinch, spread and finger counts
+
+Pinch and spread become inputs of their own, and every input now names how many fingers the
+module was flashed for, with each module offering only the counts its firmware really has.
 
 - **Pinch and spread are separate inputs.** They are the two halves of one field and each
   needs its own key, so the Inputs add row now offers **Pinch** and **Spread** on their own and
@@ -22,6 +25,10 @@
   to a counted row for the same gesture would fight over the same flashed field and send two
   different things. A row from before finger counts still shows "any fingers" until you pick a
   count; the engine's any-count fallback for bindings is unchanged.
+
+Upgrading: nothing to do. Existing rows keep their keys and counts. If an Inputs row shows
+"any fingers" (the default Tune swipes on F17 to F20 are such rows), pick the count that Tune
+is flashed for; until then that row cannot be exported as a module profile.
 
 ## 0.3.0 — Touch support
 
