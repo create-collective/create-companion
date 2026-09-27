@@ -161,12 +161,14 @@ export function streams(id: string): boolean {
  * fields (cursor, left click, right click) and ignores a key written to them (probe
  * 2026-09-10: a key in the 2-finger tap field read back fine, the tap still right-clicked).
  * NayaFlow refuses to map them and OpenFlow mirrors that, so the Inputs page does not offer
- * them either. The events themselves still parse, so an existing row keeps its value.
+ * them either. A Tune stops at 3 fingers (no 4-finger field on the dial). The events themselves
+ * still parse, so an existing row keeps its value.
  */
 export function fingerOptions(module: ModuleId, g: GestureId): number[] {
   if (!takesFingers(g)) return [];
   if (g === "PINCH" || g === "SPREAD") return [2];
-  if (module === "TUNE") return [1, 2, 3, 4];
+  // The Tune has no 4-finger fields at all: its taps and swipes stop at 3 fingers.
+  if (module === "TUNE") return [1, 2, 3];
   return [2, 3, 4].filter((n) => !(g === "TAP" && n === 2));
 }
 
