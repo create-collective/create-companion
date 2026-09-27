@@ -108,11 +108,13 @@ function FingerSelect({ module, gesture, value, onChange }: { module: ModuleId; 
   // A row made before a count was withheld keeps showing its value; only new choices are limited.
   const opts = value && !allowed.includes(value) ? [value, ...allowed] : allowed;
   const title =
-    "How many fingers the module was flashed for. Blank = any count (needed for export)." +
-    (module === "TUNE" ? "" : " A Touch cannot map 1 finger or a 2-finger tap yet: the module firmware owns those.");
+    "How many fingers the module was flashed for. Every input needs a count: an any-count row next to a counted one for the same gesture would fight over the same flashed field." +
+    (module === "TUNE" ? "" : " A Touch cannot map 1 finger or a 2-finger tap yet: the module firmware owns those.") +
+    (value === null ? " This row predates finger counts: pick one to export it." : "");
   return (
     <select value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} title={title}>
-      <option value="">any fingers</option>
+      {/* "any fingers" is no longer offered; a legacy row without a count still shows it until a count is picked. */}
+      {value === null && <option value="">any fingers</option>}
       {opts.map((n) => (
         <option key={n} value={n}>
           {fingersLabel(n)}

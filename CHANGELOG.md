@@ -15,6 +15,13 @@
 - Both send a run of keys scaled to how far the fingers travel, like a two-finger swipe, so
   those rows carry the **One per swipe / Follow swipe** switch. One per swipe is the default:
   the gesture fires its action once.
+- **Finger counts follow the module.** The Tune stops at three fingers (it has no 4-finger
+  field), so the Inputs page no longer offers **4 fingers** for a Tune tap or swipe. A Touch
+  still offers 3 and 4 for taps and 2 to 4 for swipes; pinch and spread stay two fingers.
+- **Every input has a finger count.** The **any fingers** choice is gone: an any-count row next
+  to a counted row for the same gesture would fight over the same flashed field and send two
+  different things. A row from before finger counts still shows "any fingers" until you pick a
+  count; the engine's any-count fallback for bindings is unchanged.
 
 ## 0.3.0 — Touch support
 
