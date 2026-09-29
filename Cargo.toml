@@ -20,7 +20,7 @@ edition = "2021"
 license = "MIT"
 readme = "README.md"
 description = "Create Companion: turns Naya Create Tune/Touch gestures into per-application shortcuts"
-repository = "https://github.com/traviswye/create-companion"
+repository = "https://github.com/create-collective/create-companion"
 
 [workspace.dependencies]
 companion-core = { path = "crates/companion-core" }

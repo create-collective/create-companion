@@ -11,18 +11,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/traviswye/create-companion/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/traviswye/create-companion?style=flat-square&label=release&color=e06000"></a>
-  <a href="https://github.com/traviswye/create-companion/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/traviswye/create-companion/total?style=flat-square&color=555"></a>
+  <a href="https://github.com/create-collective/create-companion/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/create-collective/create-companion?style=flat-square&label=release&color=e06000"></a>
+  <a href="https://github.com/create-collective/create-companion/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/create-collective/create-companion/total?style=flat-square&color=555"></a>
   <img alt="Windows and macOS" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS-555?style=flat-square">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-555?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/traviswye/create-companion/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows%2010%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white"></a>&nbsp;
-  <a href="https://github.com/traviswye/create-companion/releases/latest"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS%2010.15%2B-1c1c1e?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/create-collective/create-companion/releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows%2010%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white"></a>&nbsp;
+  <a href="https://github.com/create-collective/create-companion/releases/latest"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS%2010.15%2B-1c1c1e?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
-<p align="center"><a href="INSTALL.md">Install guide</a> · <a href="CHANGELOG.md">Release notes</a> · <a href="https://github.com/traviswye/create-companion/discussions">Discussions</a> · <a href="https://github.com/traviswye/create-companion/issues/new/choose">Report a bug or request an app</a></p>
+<p align="center"><a href="INSTALL.md">Install guide</a> · <a href="CHANGELOG.md">Release notes</a> · <a href="https://github.com/create-collective/create-companion/discussions">Discussions</a> · <a href="https://github.com/create-collective/create-companion/issues/new/choose">Report a bug or request an app</a></p>
 
 <p align="center">
   <img src="docs/media/demo.gif" width="880" alt="A tap on the Tune opens a new Chrome tab, the dial cycles through tabs, and on a YouTube tab the same tap becomes play/pause and the dial seeks">

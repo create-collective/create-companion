@@ -3,14 +3,14 @@
 ## Requirements
 
 - Windows 10 or 11, 64-bit; or macOS 10.15 or later (Intel or Apple Silicon; see [macOS](#macos) below).
-- A Naya Create keyboard with a Tune or Touch module, and [OpenFlow](https://github.com/traviswye/NayaOS)
+- A Naya Create keyboard with a Tune or Touch module, and [OpenFlow](https://github.com/create-collective/openflow)
   to flash the module once.
 - No administrator rights needed: the installer is per-user.
 
 ## Install
 
 1. Download `Create Companion_<version>_x64-setup.exe` from the
-   [Releases page](https://github.com/traviswye/create-companion/releases). The `.sha256` file
+   [Releases page](https://github.com/create-collective/create-companion/releases). The `.sha256` file
    next to it holds the checksum if you want to verify the download:
 
    ```powershell
@@ -120,7 +120,7 @@ folders, plus `~/Library/LaunchAgents/dev.createcompanion.engine.plist` if start
 ## Building the installer yourself
 
 ```powershell
-git clone https://github.com/traviswye/create-companion
+git clone https://github.com/create-collective/create-companion
 cd create-companion
 powershell -ExecutionPolicy Bypass -File tools\build_installer.ps1
 ```
