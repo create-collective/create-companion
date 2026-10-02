@@ -1,5 +1,10 @@
-# Release: on a version tag, build the Windows installer and attach it to a
-# GitHub Release. macOS joins in Phase 5.
+# Release: on a version tag, build the Windows installer and the macOS dmg and
+# attach them to a GitHub Release.
+#
+# Signing: Windows through Azure Artifact Signing, macOS with a Developer ID
+# certificate plus notarization. Both switch on by themselves once the secrets
+# and variables named in the build steps exist (the two build scripts in tools/
+# say what each one is); until then the builds are unsigned.
 
 name: release
 
@@ -33,11 +38,16 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           ver=$(python -c "import json;print(json.load(open('ui/src-tauri/tauri.conf.json'))['version'])")
           test "$tag" = "$ver" || (echo "::error::tag v$tag != tauri.conf.json version $ver" && exit 1)
-      - name: Build installer
+      - name: Build installer (signed when the signing secrets exist)
         shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
         run: powershell -ExecutionPolicy Bypass -File tools/build_installer.ps1
-      # Code signing: add a step here once a certificate exists (Tauri reads
-      # bundle.windows.certificateThumbprint, or sign the .exe with signtool).
       - uses: actions/upload-artifact@v4
         with:
           name: create-companion-windows
@@ -71,10 +81,15 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - name: Build app bundle and dmg (universal)
+      - name: Build app bundle and dmg (universal; signed and notarized when the signing secrets exist)
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: bash tools/build_installer.sh
-      # Signing and notarization: add APPLE_CERTIFICATE / APPLE_ID secrets and
-      # Tauri's macOS signing env here once an Apple Developer account exists.
       - uses: actions/upload-artifact@v4
         with:
           name: create-companion-macos
