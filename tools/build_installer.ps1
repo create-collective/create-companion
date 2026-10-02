@@ -83,8 +83,27 @@ Get-ChildItem "target\release\bundle\nsis\*.exe" | ForEach-Object {
 }
 
 if ($signing) {
-  # The bundler reports a skipped signature as a log line, not a failure: ask the files.
-  $signed = @(Get-ChildItem "target\release\bundle\nsis\*.exe") + @(Get-Item "target\release\create-companion.exe", "target\release\create-companion-ui.exe")
+  # The bundler reports a skipped signature as a log line, not a failure: ask the files. The
+  # configuration window is checked INSIDE the installer: Tauri patches the built exe with its
+  # bundle type, signs it, packs it, then puts the unsigned original back in target\release,
+  # so the signed copy exists only in the installer. 7-Zip reads an NSIS installer as an
+  # archive; the GitHub runners have it, a developer machine may not, and then the installer
+  # and the engine are checked alone.
+  $signed = @(Get-ChildItem "target\release\bundle\nsis\*.exe") + @(Get-Item "target\release\create-companion.exe")
+  $sevenZip = Get-Command 7z -ErrorAction SilentlyContinue
+  if (-not $sevenZip -and (Test-Path "$env:ProgramFiles\7-Zip\7z.exe")) { $sevenZip = Get-Item "$env:ProgramFiles\7-Zip\7z.exe" }
+  if ($sevenZip) {
+    $extract = Join-Path ([IO.Path]::GetTempPath()) "create-companion-installer-contents"
+    if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
+    & $sevenZip.Source x -y "-o$extract" (Get-ChildItem "target\release\bundle\nsis\*-setup.exe" | Select-Object -First 1).FullName | Out-Null
+    $inside = @(Get-ChildItem $extract -Recurse -Filter "create-companion*.exe")
+    if (-not ($inside | Where-Object Name -eq "create-companion-ui.exe")) {
+      Write-Host "create-companion-ui.exe not found inside the installer (7-Zip extraction failed?)" -ForegroundColor Red; exit 1
+    }
+    $signed += $inside
+  } else {
+    Write-Host "7-Zip not found; the configuration window inside the installer is not checked here" -ForegroundColor Yellow
+  }
   foreach ($f in $signed) {
     $s = Get-AuthenticodeSignature -LiteralPath $f.FullName
     Write-Host ("{0}  {1}  {2}" -f $s.Status, $s.SignerCertificate.Subject, $f.Name)
