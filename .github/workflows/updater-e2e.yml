@@ -1,0 +1,59 @@
+# The in-app updater, end to end: an installed build updates itself from a manifest served on
+# localhost, on a clean Windows runner and a clean Mac. Both builds are signed with a throwaway
+# updater key made in the job; the release key and the code-signing secrets are not used.
+# tools/updater_e2e.ps1 and tools/updater_e2e.sh hold the steps.
+
+name: updater-e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ui/src-tauri/**"
+      - "ui/src/Updates.tsx"
+      - "crates/companion-core/src/updates.rs"
+      - "crates/companion-engine/src/updates.rs"
+      - "crates/companion-engine/src/ipc.rs"
+      - "tools/build_installer.*"
+      - "tools/updater_*"
+      - ".github/workflows/updater-e2e.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - name: Old build updates itself to 9.9.9 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/updater_e2e.ps1
+      - name: Old build updates itself to 9.9.9 (macOS)
+        if: runner.os == 'macOS'
+        run: bash tools/updater_e2e.sh
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-e2e-logs-${{ matrix.os }}
+          path: |
+            ~/AppData/Local/CreateCompanion/logs/
+            ~/Library/Logs/CreateCompanion/
+          if-no-files-found: ignore

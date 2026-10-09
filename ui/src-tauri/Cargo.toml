@@ -24,6 +24,9 @@ companion-core.workspace = true
 companion-platform.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+# Installs a release: downloads it, checks its signature against the key in
+# tauri.conf.json, runs the installer (Windows) or swaps the app bundle (macOS).
+tauri-plugin-updater = "2"
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

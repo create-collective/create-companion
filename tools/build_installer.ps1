@@ -15,6 +15,12 @@
   AZURE_CLIENT_SECRET. With none of them the installer is unsigned, as on a developer's
   machine. tools/sign_windows.ps1 signs each file.
 
+  Update artefacts (the .sig next to the installer that the in-app updater checks) switch on
+  the same way, with TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD: the
+  private half of the key whose public half is in tauri.conf.json. CREATE_COMPANION_EXTRA_CONFIG
+  names a Tauri config file merged last (the updater test uses it to change the version, the
+  key and the manifest's address).
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File D:\CreateCompanion\tools\build_installer.ps1
 #>
@@ -36,7 +42,8 @@ if (-not $signing -and $missing.Count -lt $signInputs.Count) {
   Write-Host "signing inputs are incomplete; missing $($missing -join ', ')" -ForegroundColor Red
   exit 1
 }
-$tauriArgs = @()
+# Everything the release build adds to tauri.conf.json, written to one file for --config.
+$extra = @{ bundle = @{} }
 if ($signing) {
   Write-Host "== signing: ON (Azure Artifact Signing) ==" -ForegroundColor Cyan
   # One PowerShell for both the module install and every signature, so the module is found.
@@ -44,15 +51,34 @@ if ($signing) {
   & $ps -NoProfile -NonInteractive -Command "if (-not (Get-Module -ListAvailable TrustedSigning)) { Install-Module -Name TrustedSigning -MinimumVersion 0.5.0 -Force -Repository PSGallery -Scope CurrentUser }"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   $signScript = Join-Path $root "tools\sign_windows.ps1"
-  $signConfig = Join-Path ([IO.Path]::GetTempPath()) "create-companion-signing.json"
-  $json = @{ bundle = @{ windows = @{ signCommand = @{
+  $extra.bundle.windows = @{ signCommand = @{
     cmd  = $ps
     args = @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $signScript, "%1")
-  } } } } | ConvertTo-Json -Depth 6
-  [IO.File]::WriteAllText($signConfig, $json)      # no BOM; the Tauri CLI reads it as JSON
-  $tauriArgs = @("--", "--config", $signConfig)
+  } }
 } else {
   Write-Host "== signing: off (no signing inputs); the installer will be UNSIGNED ==" -ForegroundColor Yellow
+}
+
+$updInputs = "TAURI_SIGNING_PRIVATE_KEY", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+$updMissing = @($updInputs | Where-Object { -not [Environment]::GetEnvironmentVariable($_) })
+$updater = $updMissing.Count -eq 0
+if (-not $updater -and $updMissing.Count -lt $updInputs.Count) {
+  Write-Host "updater key inputs are incomplete; missing $($updMissing -join ', ')" -ForegroundColor Red
+  exit 1
+}
+if ($updater) {
+  Write-Host "== update artefacts: ON (the installer's .sig for the in-app updater) ==" -ForegroundColor Cyan
+  $extra.bundle.createUpdaterArtifacts = $true
+} else {
+  Write-Host "== update artefacts: off (no updater key) ==" -ForegroundColor Yellow
+}
+
+$extraConfig = Join-Path ([IO.Path]::GetTempPath()) "create-companion-build.json"
+[IO.File]::WriteAllText($extraConfig, ($extra | ConvertTo-Json -Depth 8))   # no BOM; the Tauri CLI reads it as JSON
+$tauriArgs = @("--", "--config", $extraConfig)
+if ($env:CREATE_COMPANION_EXTRA_CONFIG) {
+  Write-Host "extra Tauri config: $env:CREATE_COMPANION_EXTRA_CONFIG"
+  $tauriArgs += @("--config", $env:CREATE_COMPANION_EXTRA_CONFIG)
 }
 
 Write-Host "== engine ==" -ForegroundColor Cyan
@@ -76,6 +102,13 @@ npm run tauri build @tauriArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Set-Location $root
+if ($updater) {
+  $setup = Get-ChildItem "target\release\bundle\nsis\*-setup.exe" | Select-Object -First 1
+  if (-not (Test-Path "$($setup.FullName).sig")) {
+    Write-Host "no update signature next to $($setup.Name)" -ForegroundColor Red; exit 1
+  }
+  Write-Host "update signature: $($setup.Name).sig" -ForegroundColor Green
+}
 Get-ChildItem "target\release\bundle\nsis\*.exe" | ForEach-Object {
   $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
   "$h  $($_.Name)" | Out-File "$($_.FullName).sha256" -Encoding ascii

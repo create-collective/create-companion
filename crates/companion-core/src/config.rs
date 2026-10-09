@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 ///   `stream_gap_ms`, `[engine.accel]`. Every v2 field has a default, so a v1
 ///   file parses as-is; migration renames the fallback profile and stamps the
 ///   new version so the file is rewritten in the current shape.
+///   Later optional v2 fields: engine `check_for_updates` (2026-10-09).
 pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// Engine-level settings that are not about mappings.
@@ -37,6 +38,12 @@ pub struct EngineSettings {
     /// are dropped (the first key already fired). Slow swipes pause up to
     /// ~200 ms between keys, so keep this above that.
     pub stream_gap_ms: u32,
+    /// Look for a new release once a week (see `updates.rs`). Absent until the
+    /// user has answered the question the configuration window asks once;
+    /// nothing is checked before a yes. Written before `accel`: TOML wants the
+    /// plain values of a table ahead of its sub-tables.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check_for_updates: Option<bool>,
     /// Dial acceleration curves and the repeat cap (`[engine.accel]`).
     pub accel: AccelSettings,
 }
@@ -48,6 +55,7 @@ impl Default for EngineSettings {
             log_level: "info".into(),
             namespace_window_ms: 100,
             stream_gap_ms: 300,
+            check_for_updates: None,
             accel: AccelSettings::default(),
         }
     }
@@ -189,6 +197,28 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn check_for_updates_absent_until_answered() {
+        let mut cfg = Config::default();
+        let text = cfg.to_toml().unwrap();
+        assert!(
+            !text.contains("check_for_updates"),
+            "unanswered is not written"
+        );
+        assert_eq!(
+            Config::from_toml(&text).unwrap().engine.check_for_updates,
+            None
+        );
+
+        cfg.engine.check_for_updates = Some(true);
+        let text = cfg.to_toml().unwrap();
+        assert!(text.contains("check_for_updates = true"));
+        assert_eq!(
+            Config::from_toml(&text).unwrap().engine.check_for_updates,
+            Some(true)
+        );
+    }
 
     const SAMPLE: &str = r#"
 schema_version = 1

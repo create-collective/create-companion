@@ -234,3 +234,16 @@ table.map .ev > div:first-child { white-space: nowrap; }
 .searchbox input { width: 100%; padding-right: 26px; }
 .searchbox .clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 6px; cursor: pointer; border-radius: 6px; }
 .searchbox .clear:hover { color: var(--text); background: var(--panel-2); }
+
+/* ---- updates ---- */
+.small { font-size: 12px; }
+.check-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.update-state.ok { color: var(--ok); }
+.update-state.error { color: var(--err); }
+.update-offer { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.update-notes { margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; font: 12px/1.5 var(--font); color: var(--muted); }
+.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); transition: width .2s; }
+.update-note { color: var(--accent); font-weight: 600; }
+.ask-updates { margin: 14px 20px 0; }
+.ask-updates .grow { flex: 1; }
