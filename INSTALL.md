@@ -17,9 +17,12 @@
    Get-FileHash ".\Create Companion_0.1.0_x64-setup.exe" -Algorithm SHA256
    ```
 
-2. Run the installer. **The installer is not code-signed yet**, so Windows SmartScreen will show
-   *"Windows protected your PC"*. Click **More info**, then **Run anyway**. Signing is planned;
-   until then the checksum above is the way to confirm you have the file from the Releases page.
+2. Run the installer. Releases after 0.4.0 are code-signed, and Windows names **Travis Wye** as
+   the publisher. SmartScreen can still show *"Windows protected your PC"* for a while after a
+   new release, until Microsoft's download reputation for it builds up: click **More info**,
+   check that the publisher reads Travis Wye, then **Run anyway**. Releases up to 0.4.0 are
+   unsigned and always show it. Either way, the checksum above confirms you have the file from
+   the Releases page.
 
 3. Click through the installer. It installs to `%LOCALAPPDATA%\Create Companion\`, adds a
    **Create Companion** folder to the Start Menu, and starts the engine. A dial icon appears in
@@ -81,8 +84,9 @@ Delete those two folders to remove everything.
   also capture Ctrl+Alt+Tab; their switchers don't take arrow keys in sticky mode. To drive the
   switcher from the dial, disable the tool's Alt+Tab handler so Windows' own switcher is used;
   the bundled *Task View* profile matches it.
-- **Windows Defender or SmartScreen flags the installer.** Expected while the installer is
-  unsigned; verify the checksum and choose *Run anyway*.
+- **Windows Defender or SmartScreen flags the installer.** Expected for a few days after a new
+  release, before its download reputation builds up, and always for 0.4.0 and earlier, which
+  are unsigned. Check the publisher (Travis Wye) or the checksum, then choose *Run anyway*.
 
 ## macOS
 
@@ -90,7 +94,10 @@ Create Companion on macOS is a menu-bar program plus the same configuration wind
 `Create Companion_<version>_universal.dmg` from the Releases page, open it, and drag
 **Create Companion** into Applications. One build runs on both Intel and Apple Silicon Macs.
 
-**First launch.** The app is not notarized yet, so Gatekeeper blocks a double-click. Right-click
+**First launch.** Releases after 0.4.0 are signed and notarized by Apple, so the app opens on a
+double-click; macOS asks once to confirm opening an app downloaded from the internet.
+
+Version 0.4.0 and earlier are not notarized, and Gatekeeper blocks a double-click. Right-click
 (or Control-click) the app in Applications and choose **Open**, then **Open** again in the
 dialog. On macOS 15 and later the first attempt shows a warning instead; go to
 *System Settings → Privacy & Security*, scroll to the message about Create Companion, and choose
