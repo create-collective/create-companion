@@ -16,6 +16,7 @@
 //!
 //! ```json
 //! {"cmd":"learn","on":true}
+//! {"cmd":"quit"}                  (the window restarts the engine after an update)
 //! ```
 //!
 //! Config edits never go over the pipe; the UI writes the file and the
@@ -93,6 +94,7 @@ pub enum IpcMessage {
 #[serde(tag = "cmd", rename_all = "snake_case")]
 enum IpcCommand {
     Learn { on: bool },
+    Quit,
 }
 
 type Clients = Arc<Mutex<Vec<Sender<String>>>>;
@@ -101,8 +103,14 @@ type LastStatus = Arc<Mutex<Option<String>>>;
 
 /// Start the server. Every message received on `rx` is fanned out to all
 /// connected clients; `hello` is sent to each client on connect. Commands
-/// from clients are translated into [`Control`] messages on `ctrl`.
-pub fn start(rx: Receiver<IpcMessage>, hello: IpcMessage, ctrl: Sender<Control>) -> Result<()> {
+/// from clients are translated into [`Control`] messages on `ctrl`; `quit`
+/// also calls `on_quit`, which ends the main thread's loop.
+pub fn start(
+    rx: Receiver<IpcMessage>,
+    hello: IpcMessage,
+    ctrl: Sender<Control>,
+    on_quit: impl Fn() + Clone + Send + 'static,
+) -> Result<()> {
     let name = socket_name()?;
     let listener = ListenerOptions::new()
         .name(name)
@@ -152,6 +160,7 @@ pub fn start(rx: Receiver<IpcMessage>, hello: IpcMessage, ctrl: Sender<Control>)
                         })
                         .ok();
                     let ctrl = ctrl.clone();
+                    let on_quit = on_quit.clone();
                     std::thread::Builder::new()
                         .name("cc-ipc-client-r".into())
                         .spawn(move || {
@@ -162,6 +171,14 @@ pub fn start(rx: Receiver<IpcMessage>, hello: IpcMessage, ctrl: Sender<Control>)
                                         if ctrl.send(Control::SetLearn(on)).is_err() {
                                             break;
                                         }
+                                    }
+                                    Ok(IpcCommand::Quit) => {
+                                        tracing::info!(
+                                            "quit requested by the configuration window"
+                                        );
+                                        let _ = ctrl.send(Control::Quit);
+                                        on_quit();
+                                        break;
                                     }
                                     Err(e) => tracing::debug!("ipc: ignoring {line:?}: {e}"),
                                 }

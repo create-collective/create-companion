@@ -19,6 +19,8 @@ mod paths;
 mod pipeline;
 #[cfg(any(windows, target_os = "macos"))]
 mod tray;
+#[cfg(any(windows, target_os = "macos"))]
+mod updates;
 
 use anyhow::{Context, Result};
 use companion_core::presets::DEFAULT_CONFIG_TOML;
@@ -176,18 +178,6 @@ fn main() -> Result<()> {
     let (ev_tx, ev_rx) = crossbeam_channel::bounded(64);
     let (ctrl_tx, ctrl_rx) = crossbeam_channel::unbounded::<Control>();
     let (ipc_tx, ipc_rx) = crossbeam_channel::unbounded::<ipc::IpcMessage>();
-    if let Err(e) = ipc::start(
-        ipc_rx,
-        ipc::IpcMessage::Hello {
-            version: env!("CARGO_PKG_VERSION").into(),
-            config: config_path.display().to_string(),
-        },
-        ctrl_tx.clone(),
-    ) {
-        tracing::warn!(
-            "IPC server unavailable, the configuration UI will not see live status: {e:#}"
-        );
-    }
 
     hook::set_allow_injected(args.allow_injected);
     hook::set_namespace_window_ms(cfg.engine.namespace_window_ms);
@@ -207,6 +197,40 @@ fn main() -> Result<()> {
     } else {
         Some(Tray::new(autostart::is_enabled().unwrap_or(false)).context("creating tray")?)
     };
+
+    if let Err(e) = ipc::start(
+        ipc_rx,
+        ipc::IpcMessage::Hello {
+            version: env!("CARGO_PKG_VERSION").into(),
+            config: config_path.display().to_string(),
+        },
+        ctrl_tx.clone(),
+        move || waker.quit(),
+    ) {
+        tracing::warn!(
+            "IPC server unavailable, the configuration UI will not see live status: {e:#}"
+        );
+    }
+
+    // What the weekly update check offers, handed from its thread to the tray.
+    let offered: Arc<Mutex<Option<Option<String>>>> = Arc::new(Mutex::new(None));
+    if tray.is_some() {
+        let offered = Arc::clone(&offered);
+        let config_path = config_path.clone();
+        updates::spawn(
+            move || {
+                config_store::load(&config_path)
+                    .map(|c| c.engine.check_for_updates == Some(true))
+                    .unwrap_or(false)
+            },
+            move |version| {
+                if let Ok(mut o) = offered.lock() {
+                    *o = Some(version);
+                }
+                waker.wake();
+            },
+        );
+    }
 
     let worker = {
         let status = Arc::clone(&status);
@@ -259,7 +283,8 @@ fn main() -> Result<()> {
             message_loop::run(|| {
                 for action in tray.poll() {
                     match action {
-                        TrayAction::OpenUi => open_ui(&config_path),
+                        TrayAction::OpenUi => open_ui(&config_path, &[]),
+                        TrayAction::Updates => open_ui(&config_path, &["--updates"]),
                         TrayAction::OpenConfigFile => open_path(&config_path),
                         TrayAction::OpenConfigFolder => {
                             if let Some(dir) = config_path.parent() {
@@ -303,6 +328,9 @@ fn main() -> Result<()> {
                         }
                     }
                 }
+                if let Some(version) = offered.lock().ok().and_then(|mut o| o.take()) {
+                    tray.set_update(version.as_deref());
+                }
                 if let Ok(s) = status.lock() {
                     tray.set_status(&s);
                 }
@@ -322,16 +350,16 @@ const UI_EXE: &str = "create-companion-ui.exe";
 #[cfg(target_os = "macos")]
 const UI_EXE: &str = "create-companion-ui";
 
-/// Launch the configuration UI (next to this binary). Falls back to opening
-/// the config file when the UI is not installed.
+/// Launch the configuration UI (next to this binary) with `args`. Falls back to
+/// opening the config file when the UI is not installed.
 #[cfg(any(windows, target_os = "macos"))]
-fn open_ui(config_path: &std::path::Path) {
+fn open_ui(config_path: &std::path::Path, args: &[&str]) {
     let ui = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(UI_EXE)));
     match ui {
         Some(exe) if exe.exists() => {
-            if let Err(e) = std::process::Command::new(&exe).spawn() {
+            if let Err(e) = std::process::Command::new(&exe).args(args).spawn() {
                 tracing::warn!("could not start {}: {e}", exe.display());
             }
         }

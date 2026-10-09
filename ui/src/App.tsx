@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionPicker } from "./ActionPicker";
 import { AddApp } from "./AddApp";
+import { Updates } from "./Updates";
 import { Inputs, type Learned } from "./Inputs";
 import { api } from "./api";
 import {
@@ -149,6 +150,26 @@ export default function App() {
   /** Hand an unassigned key to the Inputs add row. */
   const [suggest, setSuggest] = useState<Learned | null>(null);
   const saveTimer = useRef<number | null>(null);
+  const [appVersion, setAppVersion] = useState("");
+  /** The Updates panel; `check` runs a check as it opens (the tray's "Check for updates..."). */
+  const [updates, setUpdates] = useState<{ check: boolean } | null>(null);
+  /** A newer version the engine's weekly check found. */
+  const [knownUpdate, setKnownUpdate] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.appVersion().then(setAppVersion).catch(() => {});
+    api.updateKnown().then(setKnownUpdate).catch(() => {});
+    api
+      .launchFlags()
+      .then((f) => f.updates && setUpdates({ check: true }))
+      .catch(() => {});
+  }, []);
+
+  /** The answer to "check automatically?", kept with the engine's settings. */
+  function setAutoUpdates(on: boolean) {
+    setCfg((c) => (c ? { ...c, engine: { ...c.engine, check_for_updates: on } } : c));
+    setSave({ kind: "dirty" });
+  }
 
   useEffect(() => {
     api
@@ -614,6 +635,20 @@ export default function App() {
             Engine: {engine.connected ? `running${engine.version ? " v" + engine.version : ""}${engine.paused ? " (paused)" : ""}` : "not connected"}
           </div>
           <div>Active: {engine.profile ?? "—"}</div>
+          <div>
+            {knownUpdate ? (
+              <button className="ghost update-note" style={{ padding: "2px 6px" }} onClick={() => setUpdates({ check: true })}>
+                Update to {knownUpdate}…
+              </button>
+            ) : (
+              <>
+                Version {appVersion || "…"} ·{" "}
+                <button className="ghost" style={{ padding: "2px 6px" }} onClick={() => setUpdates({ check: false })}>
+                  Updates…
+                </button>
+              </>
+            )}
+          </div>
           <button className="ghost" style={{ justifySelf: "start", padding: "2px 6px" }} onClick={() => api.openConfigFolder()} title={path}>
             Open config folder
           </button>
@@ -621,6 +656,19 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {cfg.engine.check_for_updates === undefined && (
+          <div className="detect warn ask-updates">
+            <span>
+              <b>Check for updates automatically, once a week?</b>{" "}
+              <span className="muted">It downloads one small file from GitHub; nothing is installed without you.</span>
+            </span>
+            <span className="grow" />
+            <button className="primary" onClick={() => setAutoUpdates(true)}>
+              Yes
+            </button>
+            <button onClick={() => setAutoUpdates(false)}>No</button>
+          </div>
+        )}
         {preview ? (
           <CatalogPreview entry={preview} events={events} transport={cfg.transport} os={currentOs()} allPlatforms={allPlatforms} onEnable={() => activateApp(preview)} />
         ) : showInputs ? (
@@ -904,6 +952,15 @@ export default function App() {
         />
       )}
       {adding && <AddApp onAdd={addProfile} onClose={() => setAdding(false)} />}
+      {updates && (
+        <Updates
+          version={appVersion}
+          auto={cfg.engine.check_for_updates}
+          onAuto={setAutoUpdates}
+          checkNow={updates.check}
+          onClose={() => setUpdates(null)}
+        />
+      )}
     </div>
   );
 }

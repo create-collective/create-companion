@@ -11,6 +11,7 @@
 //! Reload configuration
 //! [ ] Pause companion
 //! [ ] Start at login
+//! Check for updates...         ("Update to 1.0.1..." once a check found one)
 //! ---
 //! Quit
 //! ```
@@ -28,8 +29,12 @@ pub enum TrayAction {
     Reload,
     SetPaused(bool),
     SetAutostart(bool),
+    /// Open the configuration window on its Updates panel.
+    Updates,
     Quit,
 }
+
+const CHECK_FOR_UPDATES: &str = "Check for updates...";
 
 pub struct Tray {
     icon: TrayIcon,
@@ -37,6 +42,9 @@ pub struct Tray {
     last: MenuItem,
     pause: CheckMenuItem,
     autostart: CheckMenuItem,
+    updates: MenuItem,
+    /// The version the last update check offered, for the tooltip.
+    offered: std::cell::RefCell<Option<String>>,
     ids: Ids,
 }
 
@@ -47,6 +55,7 @@ struct Ids {
     reload: MenuId,
     pause: MenuId,
     autostart: MenuId,
+    updates: MenuId,
     quit: MenuId,
 }
 
@@ -68,6 +77,7 @@ impl Tray {
         let reload = MenuItem::new("Reload configuration", true, None);
         let pause = CheckMenuItem::new("Pause companion", true, false, None);
         let autostart = CheckMenuItem::new("Start at login", true, autostart_enabled, None);
+        let updates = MenuItem::new(CHECK_FOR_UPDATES, true, None);
         let quit = MenuItem::new("Quit", true, None);
 
         let menu = Menu::new();
@@ -81,6 +91,7 @@ impl Tray {
             &reload,
             &pause,
             &autostart,
+            &updates,
             &PredefinedMenuItem::separator(),
             &quit,
         ])
@@ -102,12 +113,15 @@ impl Tray {
                 reload: reload.id().clone(),
                 pause: pause.id().clone(),
                 autostart: autostart.id().clone(),
+                updates: updates.id().clone(),
                 quit: quit.id().clone(),
             },
             active,
             last,
             pause,
             autostart,
+            updates,
+            offered: std::cell::RefCell::new(None),
         })
     }
 
@@ -120,10 +134,24 @@ impl Tray {
             _ => "Last: —".to_string(),
         });
         self.pause.set_checked(s.paused);
+        let update = match self.offered.borrow().as_deref() {
+            Some(v) => format!("\nUpdate available: {v}"),
+            None => String::new(),
+        };
         let _ = self.icon.set_tooltip(Some(format!(
-            "Create Companion\nProfile: {}{state}",
+            "Create Companion\nProfile: {}{state}{update}",
             s.profile
         )));
+    }
+
+    /// The version a check found (the item then installs it), or `None` for the
+    /// plain "Check for updates...". The tooltip follows on the next status.
+    pub fn set_update(&self, version: Option<&str>) {
+        self.updates.set_text(match version {
+            Some(v) => format!("Update to {v}..."),
+            None => CHECK_FOR_UPDATES.to_string(),
+        });
+        *self.offered.borrow_mut() = version.map(str::to_string);
     }
 
     pub fn set_autostart(&self, enabled: bool) {
@@ -148,6 +176,8 @@ impl Tray {
                     TrayAction::SetPaused(self.pause.is_checked())
                 } else if *id == self.ids.autostart {
                     TrayAction::SetAutostart(self.autostart.is_checked())
+                } else if *id == self.ids.updates {
+                    TrayAction::Updates
                 } else if *id == self.ids.quit {
                     TrayAction::Quit
                 } else {

@@ -12,7 +12,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 const ACTIONS_CATALOG: &str = include_str!("../../../presets/actions.json");
 const APPS_CATALOG: &str = include_str!("../../../presets/apps.json");
@@ -355,10 +356,226 @@ fn spawn_engine_listener(app: AppHandle) {
         .ok();
 }
 
+// ---- Updates ---------------------------------------------------------------
+//
+// The engine does the weekly look (when the user said yes); installing happens
+// here, through Tauri's updater, which refuses a download whose signature does
+// not match the public key in tauri.conf.json. On Windows the installer takes
+// over and this process exits (the installer's hooks stop and restart the
+// engine); on macOS the app bundle is swapped in place and the engine is
+// restarted from it below.
+
+/// The update the last check found, held for the install that follows.
+struct PendingUpdate(Mutex<Option<Update>>);
+
+#[derive(Serialize)]
+struct UpdateOffer {
+    version: String,
+    current: String,
+    notes: Option<String>,
+    date: Option<String>,
+}
+
+/// One line in the log folder's `update.log`, so a failed update can be read
+/// after the fact (the window is gone by then, or never shown with --update-now).
+fn update_log(msg: &str) {
+    use std::io::Write;
+    let dir = log_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("update.log"))
+    {
+        let _ = writeln!(f, "{secs} {msg}");
+    }
+}
+
+/// The engine's log folder (companion-engine paths.rs).
+fn log_dir() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            return home.join("Library/Logs/CreateCompanion");
+        }
+    }
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("CreateCompanion")
+        .join("logs")
+}
+
+fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    let url = companion_core::updates::manifest_url()
+        .parse()
+        .map_err(err)?;
+    let handle = app.clone();
+    app.updater_builder()
+        .endpoints(vec![url])
+        .map_err(err)?
+        // Windows: the last thing before the installer takes over. Replacing the
+        // hook drops the plugin's own cleanup, so it is called here too.
+        .on_before_exit(move || {
+            update_log("handing over to the installer");
+            handle.cleanup_before_exit();
+        })
+        .build()
+        .map_err(err)
+}
+
+async fn find_update(app: &AppHandle) -> Result<Option<Update>, String> {
+    let found = updater(app)?.check().await.map_err(err);
+    match &found {
+        Ok(Some(u)) => update_log(&format!(
+            "check: {} available (running {})",
+            u.version, u.current_version
+        )),
+        Ok(None) => update_log("check: up to date"),
+        Err(e) => update_log(&format!("check failed: {e}")),
+    }
+    found
+}
+
+/// Ask the release manifest whether there is something newer than this build.
+#[tauri::command]
+async fn update_check(
+    app: AppHandle,
+    pending: State<'_, PendingUpdate>,
+) -> Result<Option<UpdateOffer>, String> {
+    let found = find_update(&app).await?;
+    let offer = found.as_ref().map(|u| UpdateOffer {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone(),
+        date: u.date.map(|d| d.to_string()),
+    });
+    *pending.0.lock().map_err(|_| "update state poisoned")? = found;
+    Ok(offer)
+}
+
+/// Install what `update_check` found, reporting progress as `update-progress`
+/// events. Windows: does not return (the installer replaces this program and
+/// starts it again). macOS: restarts the engine and then this window.
+#[tauri::command]
+async fn update_install(app: AppHandle, pending: State<'_, PendingUpdate>) -> Result<(), String> {
+    let update = pending
+        .0
+        .lock()
+        .map_err(|_| "update state poisoned")?
+        .take()
+        .ok_or("no update to install; check again")?;
+    install(&app, update).await?;
+    app.restart();
+}
+
+async fn install(app: &AppHandle, update: Update) -> Result<(), String> {
+    update_log(&format!(
+        "installing {} over {}",
+        update.version, update.current_version
+    ));
+    let progress = app.clone();
+    let mut received: u64 = 0;
+    let result = update
+        .download_and_install(
+            move |chunk, total| {
+                received += chunk as u64;
+                let _ = progress.emit(
+                    "update-progress",
+                    serde_json::json!({ "received": received, "total": total }),
+                );
+            },
+            || update_log("downloaded, signature verified"),
+        )
+        .await;
+    if let Err(e) = result {
+        update_log(&format!("install failed: {e}"));
+        return Err(e.to_string());
+    }
+    // Only macOS gets here: the bundle holds the new engine, the old one still runs.
+    restart_engine();
+    update_log("installed");
+    Ok(())
+}
+
+/// Ask the running engine to quit, wait for it to let go of its single-instance
+/// guard, and start the one now next to this executable.
+fn restart_engine() {
+    if engine_state().connected {
+        let _ = engine_send(serde_json::json!({ "cmd": "quit" }));
+        for _ in 0..50 {
+            std::thread::sleep(Duration::from_millis(100));
+            if !engine_state().connected {
+                break;
+            }
+        }
+        #[cfg(unix)]
+        if engine_state().connected {
+            update_log("engine did not quit when asked; stopping it");
+            let _ = std::process::Command::new("pkill")
+                .args(["-x", ENGINE_EXE])
+                .status();
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    match start_engine() {
+        Ok(()) => update_log("engine started from the updated app"),
+        Err(e) => update_log(&format!("engine restart failed: {e}")),
+    }
+}
+
+/// `--update-now`: check and install without a window, then exit. For the
+/// updater test and for scripted installs; the window path is the same code.
+async fn update_now(app: &AppHandle) -> Result<(), String> {
+    match find_update(app).await? {
+        // No window to bring back: the installer's hook starts the engine.
+        Some(update) => install(app, update.restart_after_install(false)).await,
+        None => Ok(()),
+    }
+}
+
+/// How the window was launched: `--updates` (the tray's "Check for updates...")
+/// opens it on the Updates panel.
+#[tauri::command]
+fn launch_flags() -> serde_json::Value {
+    serde_json::json!({ "updates": std::env::args().any(|a| a == "--updates") })
+}
+
+/// This build's version, the one the updater compares against.
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// A newer version the engine's weekly check already found, read from the file
+/// it keeps next to the configuration, so opening the window costs no request.
+/// `None` when checks are off or nothing newer is known.
+#[tauri::command]
+fn update_known(app: AppHandle) -> Option<String> {
+    let path = config_file();
+    let cfg = Config::from_toml(&std::fs::read_to_string(&path).ok()?).ok()?;
+    if cfg.engine.check_for_updates != Some(true) {
+        return None;
+    }
+    let state = std::fs::read_to_string(path.parent()?.join("update-check.json")).ok()?;
+    let latest = serde_json::from_str::<serde_json::Value>(&state)
+        .ok()?
+        .get("latest")?
+        .as_str()?
+        .to_string();
+    let current = app.package_info().version.to_string();
+    companion_core::updates::is_newer(&latest, &current).then_some(latest)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(PendingUpdate(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             load_config,
             save_config,
@@ -372,10 +589,27 @@ pub fn run() {
             engine_send,
             write_text_file,
             start_engine,
+            update_check,
+            update_install,
+            launch_flags,
+            app_version,
+            update_known,
         ])
         .setup(|app| {
             spawn_engine_listener(app.handle().clone());
+            if std::env::args().any(|a| a == "--update-now") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let code = match update_now(&handle).await {
+                        Ok(()) => 0,
+                        Err(_) => 1,
+                    };
+                    handle.exit(code);
+                });
+                return Ok(());
+            }
             if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
                 let _ = w.set_focus();
             }
             Ok(())

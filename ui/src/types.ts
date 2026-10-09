@@ -86,7 +86,8 @@ export interface AppEntry {
 
 export interface Config {
   schema_version: number;
-  engine: { start_at_login: boolean; log_level: string };
+  /** `check_for_updates` is absent until the user answers the one-time question. */
+  engine: { start_at_login: boolean; log_level: string; check_for_updates?: boolean };
   transport: Record<string, TransportCode>;
   default_profile: Profile;
   /** Overrides every other profile, whatever is in the foreground. */

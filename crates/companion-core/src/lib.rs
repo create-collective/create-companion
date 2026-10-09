@@ -19,6 +19,7 @@ pub mod keys;
 pub mod presets;
 pub mod profile;
 pub mod transport;
+pub mod updates;
 
 pub use action::Action;
 pub use config::{Config, EngineSettings};

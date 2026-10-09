@@ -24,6 +24,8 @@ dirs = "6"
 serde.workspace = true
 serde_json.workspace = true
 interprocess = "2"
+# The weekly update check: one small GET for the release manifest.
+ureq = "3"
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 tray-icon = "0.24"

@@ -15,6 +15,13 @@
 # the App Store Connect key), APPLE_API_KEY_ID, APPLE_API_ISSUER_ID. With none of them the
 # dmg is unsigned, as on a developer's machine.
 #
+# Update artefacts (Create Companion.app.tar.gz and its .sig, what the in-app updater
+# downloads and checks) switch on the same way, with TAURI_SIGNING_PRIVATE_KEY and
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD: the private half of the key whose public half is in
+# tauri.conf.json. CREATE_COMPANION_EXTRA_CONFIG names a Tauri config file merged last (the
+# updater test uses it to change the version, the key and the manifest's address).
+# CREATE_COMPANION_TARGET builds one architecture instead of the universal app (the test).
+#
 # Usage: tools/build_installer.sh          (from anywhere; needs rustup targets, Node 22, Xcode CLT)
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,33 +56,71 @@ else
   exit 1
 fi
 
-for t in aarch64-apple-darwin x86_64-apple-darwin; do
+upd_inputs=(TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
+upd_missing=()
+for name in "${upd_inputs[@]}"; do
+  [ -n "${!name:-}" ] || upd_missing+=("$name")
+done
+updater=0
+if [ "${#upd_missing[@]}" -eq 0 ]; then
+  updater=1
+  echo "== update artefacts: ON (app.tar.gz + .sig for the in-app updater) =="
+elif [ "${#upd_missing[@]}" -eq "${#upd_inputs[@]}" ]; then
+  echo "== update artefacts: off (no updater key) =="
+else
+  echo "updater key inputs are incomplete; missing ${upd_missing[*]}" >&2
+  exit 1
+fi
+tauri_args=()
+[ "$updater" -eq 1 ] && tauri_args+=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+if [ -n "${CREATE_COMPANION_EXTRA_CONFIG:-}" ]; then
+  echo "extra Tauri config: $CREATE_COMPANION_EXTRA_CONFIG"
+  tauri_args+=(--config "$CREATE_COMPANION_EXTRA_CONFIG")
+fi
+
+target="${CREATE_COMPANION_TARGET:-universal-apple-darwin}"
+if [ "$target" = universal-apple-darwin ]; then
+  arches=(aarch64-apple-darwin x86_64-apple-darwin)
+else
+  arches=("$target")
+fi
+for t in "${arches[@]}"; do
   rustup target add "$t" >/dev/null
 done
 
-echo "== engine (both architectures) =="
-cargo build --release -p create-companion --target aarch64-apple-darwin
-cargo build --release -p create-companion --target x86_64-apple-darwin
+echo "== engine (${arches[*]}) =="
+for t in "${arches[@]}"; do
+  cargo build --release -p create-companion --target "$t"
+done
 
 # Tauri builds the app once per architecture and wants a sidecar named for
 # each; it merges them into the universal bundle itself.
 mkdir -p ui/src-tauri/binaries
-for t in aarch64-apple-darwin x86_64-apple-darwin; do
+for t in "${arches[@]}"; do
   cp "target/$t/release/create-companion" "ui/src-tauri/binaries/create-companion-$t"
 done
-lipo -create \
-  target/aarch64-apple-darwin/release/create-companion \
-  target/x86_64-apple-darwin/release/create-companion \
-  -output ui/src-tauri/binaries/create-companion-universal-apple-darwin
-lipo -info ui/src-tauri/binaries/create-companion-universal-apple-darwin
+if [ "$target" = universal-apple-darwin ]; then
+  lipo -create \
+    target/aarch64-apple-darwin/release/create-companion \
+    target/x86_64-apple-darwin/release/create-companion \
+    -output ui/src-tauri/binaries/create-companion-universal-apple-darwin
+  lipo -info ui/src-tauri/binaries/create-companion-universal-apple-darwin
+fi
 
 echo "== app bundle + dmg =="
 cd ui
 [ -d node_modules ] || npm ci
-npm run tauri build -- --target universal-apple-darwin
+npm run tauri build -- --target "$target" ${tauri_args[@]+"${tauri_args[@]}"}
 cd "$root"
 
-out="target/universal-apple-darwin/release/bundle/dmg"
+if [ "$updater" -eq 1 ]; then
+  for tgz in "target/$target/release/bundle/macos/"*.app.tar.gz; do
+    [ -f "$tgz.sig" ] || { echo "no update signature next to $tgz" >&2; exit 1; }
+    echo "update signature: $(basename "$tgz").sig"
+  done
+fi
+
+out="target/$target/release/bundle/dmg"
 for f in "$out"/*.dmg; do
   shasum -a 256 "$f" | sed "s#$out/##" > "$f.sha256"
   ls -lh "$f" | awk '{print $5, $9}'
@@ -83,7 +128,7 @@ done
 
 if [ "$signing" -eq 1 ]; then
   # The bundler reports a skipped step as a log line, not a failure: ask the bundle itself.
-  for app in target/universal-apple-darwin/release/bundle/macos/*.app; do
+  for app in "target/$target/release/bundle/macos/"*.app; do
     codesign --verify --deep --strict --verbose=2 "$app"
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"
