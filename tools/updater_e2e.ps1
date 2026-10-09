@@ -80,7 +80,9 @@ function InstalledVersion {
 
 try {
   Step "install old ($oldVersion)"
-  Start-Process (Join-Path $work "old-setup.exe") -ArgumentList "/S" -Wait
+  # The installer's own exit only: -Wait would also wait for the engine it starts, which runs on.
+  $setup = Start-Process (Join-Path $work "old-setup.exe") -ArgumentList "/S" -PassThru
+  if (-not $setup.WaitForExit(180000)) { Fail "the old installer did not finish in 3 minutes" }
   $v = InstalledVersion
   if ($v -ne $oldVersion) { Fail "installed version is '$v', expected $oldVersion" }
   $dir = Join-Path $env:LOCALAPPDATA "Create Companion"
