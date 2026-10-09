@@ -49,10 +49,19 @@ adds itself to the current user's startup entries.
 
 ## Upgrade
 
-Download the new installer and run it. It closes the running engine and window, replaces the
-programs, and starts the engine again. Your configuration is kept; if its format has changed, the
-engine migrates it on first start and keeps the original next to it as
-`config.backup-v<N>.toml`.
+From 1.0 on, Create Companion updates itself. Open **Updates…** at the bottom of the
+configuration window, or choose **Check for updates…** in the tray menu, and click **Install**
+when a new version is offered. If you said yes to the weekly check, the tray item reads
+**Update to x.y.z…** once there is one. The update is verified against Create Companion's
+signing key, the window and engine close while it installs, and the engine starts again on the
+new version.
+
+You can also download the new installer and run it, which is the only way up from 0.4.0 and
+earlier. It closes the running engine and window, replaces the programs, and starts the engine
+again.
+
+Either way your configuration is kept; if its format has changed, the engine migrates it on
+first start and keeps the original next to it as `config.backup-v<N>.toml`.
 
 ## Uninstall
 

@@ -5,6 +5,23 @@
      scripts, gesture plans, generators) stays in the repository for contributors, never ships
      in an installer, and is never mentioned here; the release job refuses a section that does. -->
 
+## Unreleased
+
+- **Updates from inside the app.** The configuration window asks once whether Create Companion
+  may check for updates, once a week. Nothing is checked until you say yes, and you can change
+  your mind under **Updates…** at the bottom of the window. A check downloads one small file from
+  GitHub that names the newest release; nothing about you or your setup is sent.
+- When a newer version exists, the tray menu's **Check for updates…** becomes **Update to
+  x.y.z…** and the window shows it too. Nothing downloads or installs until you click
+  **Install**; the update is checked against Create Companion's own signing key before it runs,
+  and the engine restarts on the new version by itself.
+- **Signed installers.** Windows shows Travis Wye as the publisher, and the macOS app is signed
+  and notarized by Apple, so it opens with a double-click.
+
+Upgrading: install this version by hand one last time; later versions arrive through the app.
+On macOS, grant Input Monitoring and Accessibility again once after installing (the app's
+signature is new); updates after this one keep them.
+
 ## 0.4.0 — Pinch, spread and finger counts
 
 Pinch and spread become inputs of their own, and every input now names how many fingers the
