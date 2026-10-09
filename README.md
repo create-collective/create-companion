@@ -181,10 +181,11 @@ documentation; every entry cites its sources.
 - **Shipped**: Windows and macOS engines with the same configuration window; the 160+ entry
   catalog; Tune and Touch inputs with modifier namespaces; God Mode and System; per-OS
   filtering; installers and a tag-driven release workflow.
-- **Signed releases**: from the first release after 0.4.0, the Windows installer is signed
-  (Azure Artifact Signing) and the macOS app is signed and notarized, so the SmartScreen and
-  Gatekeeper workarounds in INSTALL.md apply only to 0.4.0 and earlier. The release workflow
-  signs whenever the secrets listed in `tools/build_installer.ps1` and
+- **1.0.0, signed and self-updating**: the Windows installer is signed (Azure Artifact
+  Signing), the macOS app is signed and notarized, so the SmartScreen and Gatekeeper
+  workarounds in INSTALL.md apply only to 0.4.0 and earlier. The app updates itself: it asks
+  once whether to check weekly, and installs a new release only when you click Install. The
+  release workflow signs whenever the secrets listed in `tools/build_installer.ps1` and
   `tools/build_installer.sh` exist.
 - **Next**: more Touch fields as OpenFlow exposes them.
 - **Later**: Linux.

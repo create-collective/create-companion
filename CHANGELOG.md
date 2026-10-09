@@ -5,7 +5,7 @@
      scripts, gesture plans, generators) stays in the repository for contributors, never ships
      in an installer, and is never mentioned here; the release job refuses a section that does. -->
 
-## Unreleased
+## 1.0.0 — Signed, and updates itself
 
 - **Updates from inside the app.** The configuration window asks once whether Create Companion
   may check for updates, once a week. Nothing is checked until you say yes, and you can change
